@@ -2,35 +2,45 @@
 
 ## Install
 
+### From the official release
+
 Download the [latest release]:
 
- - [`scrcpy-win64-v2.7.zip`][direct-win64] (64-bit)  
-   <sub>SHA-256: `5910bc18d5a16f42d84185ddc7e16a4cee6a6f5f33451559c1a1d6d0099bd5f5`</sub>
- - [`scrcpy-win32-v2.7.zip`][direct-win32] (32-bit)  
-   <sub>SHA-256: `ef4daf89d500f33d78b830625536ecb18481429dd94433e7634c824292059d06`</sub>
+ - [`scrcpy-win64-v4.1.zip`][direct-win64] (64-bit)  
+   <sub>SHA-256: `5b12172b3264b2889f4583ee64752ce832e29bc8b1089dca81093459697165db`</sub>
+ - [`scrcpy-win32-v4.1.zip`][direct-win32] (32-bit)  
+   <sub>SHA-256: `fa57b36622a53b6aec74c5e5b5c08236165efa445c4f186d48f176ebf9c24eec`</sub>
 
 [latest release]: https://github.com/Genymobile/scrcpy/releases/latest
-[direct-win64]: https://github.com/Genymobile/scrcpy/releases/download/v2.7/scrcpy-win64-v2.7.zip
-[direct-win32]: https://github.com/Genymobile/scrcpy/releases/download/v2.7/scrcpy-win32-v2.7.zip
+[direct-win64]: https://github.com/Genymobile/scrcpy/releases/download/v4.1/scrcpy-win64-v4.1.zip
+[direct-win32]: https://github.com/Genymobile/scrcpy/releases/download/v4.1/scrcpy-win32-v4.1.zip
 
 and extract it.
 
-Alternatively, you could install it from packages manager, like [Chocolatey]:
+
+### From a package manager
+
+From [WinGet] (ADB and other dependencies will be installed alongside scrcpy):
+
+```bash
+winget install --exact Genymobile.scrcpy
+```
+
+From [Chocolatey]:
 
 ```bash
 choco install scrcpy
 choco install adb    # if you don't have it yet
 ```
 
-or [Scoop]:
-
+From [Scoop]:
 
 ```bash
 scoop install scrcpy
 scoop install adb    # if you don't have it yet
 ```
 
-[Winget]: https://github.com/microsoft/winget-cli
+[WinGet]: https://github.com/microsoft/winget-cli
 [Chocolatey]: https://chocolatey.org/
 [Scoop]: https://scoop.sh
 
@@ -54,25 +64,13 @@ scrcpy
 
 or with arguments (here to disable audio and record to `file.mkv`):
 
-```
+```bash
 scrcpy --no-audio --record=file.mkv
 ```
 
 Documentation for command line arguments is available:
  - `scrcpy --help`
  - on [github](/README.md)
-
-To start scrcpy directly without opening a terminal, double-click on one of
-these files:
- - `scrcpy-console.bat`: start with a terminal open (it will close when scrcpy
-   terminates, unless an error occurs);
- - `scrcpy-noconsole.vbs`: start without a terminal (but you won't see any error
-   message).
-
-_Avoid double-clicking on `scrcpy.exe` directly: on error, the terminal would
-close immediately and you won't have time to read any error message (this
-executable is intended to be run from the terminal). Use `scrcpy-console.bat`
-instead._
 
 If you plan to always use the same arguments, create a file `myscrcpy.bat`
 (enable [show file extensions] to avoid confusion) containing your command, For
@@ -82,9 +80,17 @@ example:
 scrcpy --prefer-text --turn-screen-off --stay-awake
 ```
 
+Add `--pause-on-exit=if-error` if you want the console to remain open when
+scrcpy fails:
+
+```bash
+scrcpy --prefer-text --turn-screen-off --stay-awake --pause-on-exit=if-error
+```
+
 [show file extensions]: https://www.howtogeek.com/205086/beginner-how-to-make-windows-show-file-extensions/
 
-Then just double-click on that file.
+Then just double-click on that file to run it.
 
-You could also edit (a copy of) `scrcpy-console.bat` or `scrcpy-noconsole.vbs`
-to add some arguments.
+To start scrcpy without opening a terminal, double-click `scrcpy-noconsole.vbs`
+(note that errors won't be shown). To pass arguments, edit (a copy of)
+`scrcpy-noconsole.vbs` and add the desired arguments.

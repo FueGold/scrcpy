@@ -5,7 +5,6 @@
 
 #include <assert.h>
 #include <stdbool.h>
-#include <stddef.h>
 #include <stdint.h>
 
 #include "util/tick.h"
@@ -44,6 +43,8 @@ enum sc_codec {
     SC_CODEC_H264,
     SC_CODEC_H265,
     SC_CODEC_AV1,
+    SC_CODEC_VP8,
+    SC_CODEC_VP9,
     SC_CODEC_OPUS,
     SC_CODEC_AAC,
     SC_CODEC_FLAC,
@@ -60,6 +61,14 @@ enum sc_audio_source {
     SC_AUDIO_SOURCE_OUTPUT,
     SC_AUDIO_SOURCE_MIC,
     SC_AUDIO_SOURCE_PLAYBACK,
+    SC_AUDIO_SOURCE_MIC_UNPROCESSED,
+    SC_AUDIO_SOURCE_MIC_CAMCORDER,
+    SC_AUDIO_SOURCE_MIC_VOICE_RECOGNITION,
+    SC_AUDIO_SOURCE_MIC_VOICE_COMMUNICATION,
+    SC_AUDIO_SOURCE_VOICE_CALL,
+    SC_AUDIO_SOURCE_VOICE_CALL_UPLINK,
+    SC_AUDIO_SOURCE_VOICE_CALL_DOWNLINK,
+    SC_AUDIO_SOURCE_VOICE_PERFORMANCE,
 };
 
 enum sc_camera_facing {
@@ -82,6 +91,19 @@ enum sc_orientation {         // v v v
     SC_ORIENTATION_FLIP_90,   // 1 0 1
     SC_ORIENTATION_FLIP_180,  // 1 1 0
     SC_ORIENTATION_FLIP_270,  // 1 1 1
+};
+
+enum sc_orientation_lock {
+    SC_ORIENTATION_UNLOCKED,
+    SC_ORIENTATION_LOCKED_VALUE,   // lock to specified orientation
+    SC_ORIENTATION_LOCKED_INITIAL, // lock to initial device orientation
+};
+
+enum sc_display_ime_policy {
+    SC_DISPLAY_IME_POLICY_UNDEFINED,
+    SC_DISPLAY_IME_POLICY_LOCAL,
+    SC_DISPLAY_IME_POLICY_FALLBACK,
+    SC_DISPLAY_IME_POLICY_HIDE,
 };
 
 static inline bool
@@ -129,16 +151,6 @@ sc_orientation_get_name(enum sc_orientation orientation) {
             return "(unknown)";
     }
 }
-
-enum sc_lock_video_orientation {
-    SC_LOCK_VIDEO_ORIENTATION_UNLOCKED = -1,
-    // lock the current orientation when scrcpy starts
-    SC_LOCK_VIDEO_ORIENTATION_INITIAL = -2,
-    SC_LOCK_VIDEO_ORIENTATION_0 = 0,
-    SC_LOCK_VIDEO_ORIENTATION_90 = 3,
-    SC_LOCK_VIDEO_ORIENTATION_180 = 2,
-    SC_LOCK_VIDEO_ORIENTATION_270 = 1,
-};
 
 enum sc_keyboard_input_mode {
     SC_KEYBOARD_INPUT_MODE_AUTO,
@@ -210,6 +222,13 @@ enum sc_shortcut_mod {
     SC_SHORTCUT_MOD_RSUPER = 1 << 5,
 };
 
+enum sc_render_fit {
+    SC_RENDER_FIT_AUTO,
+    SC_RENDER_FIT_LETTERBOX,
+    SC_RENDER_FIT_STRETCHED,
+    SC_RENDER_FIT_UNSCALED,
+};
+
 struct sc_port_range {
     uint16_t first;
     uint16_t last;
@@ -231,6 +250,7 @@ struct scrcpy_options {
     const char *camera_id;
     const char *camera_size;
     const char *camera_ar;
+    const char *camera_zoom;
     uint16_t camera_fps;
     enum sc_log_level log_level;
     enum sc_codec video_codec;
@@ -247,22 +267,29 @@ struct scrcpy_options {
     uint32_t tunnel_host;
     uint16_t tunnel_port;
     uint8_t shortcut_mods; // OR of enum sc_shortcut_mod values
+    uint8_t min_size_alignment;
     uint16_t max_size;
     uint32_t video_bit_rate;
     uint32_t audio_bit_rate;
     const char *max_fps; // float to be parsed by the server
-    enum sc_lock_video_orientation lock_video_orientation;
+    const char *angle; // float to be parsed by the server
+    enum sc_orientation capture_orientation;
+    enum sc_orientation_lock capture_orientation_lock;
     enum sc_orientation display_orientation;
     enum sc_orientation record_orientation;
+    enum sc_display_ime_policy display_ime_policy;
+    enum sc_render_fit render_fit;
     int16_t window_x; // SC_WINDOW_POSITION_UNDEFINED for "auto"
     int16_t window_y; // SC_WINDOW_POSITION_UNDEFINED for "auto"
     uint16_t window_width;
     uint16_t window_height;
     uint32_t display_id;
-    sc_tick display_buffer;
+    uint32_t background_color;
+    sc_tick video_buffer;
     sc_tick audio_buffer;
     sc_tick audio_output_buffer;
     sc_tick time_limit;
+    sc_tick screen_off_timeout;
 #ifdef HAVE_V4L2
     const char *v4l2_device;
     sc_tick v4l2_buffer;
@@ -278,6 +305,7 @@ struct scrcpy_options {
     bool audio_playback;
     bool turn_screen_off;
     enum sc_key_inject_mode key_inject_mode;
+    bool window_aspect_ratio_lock;
     bool window_borderless;
     bool mipmaps;
     bool stay_awake;
@@ -304,10 +332,20 @@ struct scrcpy_options {
 #define SC_OPTION_LIST_DISPLAYS 0x2
 #define SC_OPTION_LIST_CAMERAS 0x4
 #define SC_OPTION_LIST_CAMERA_SIZES 0x8
+#define SC_OPTION_LIST_APPS 0x10
     uint8_t list;
     bool window;
     bool mouse_hover;
     bool audio_dup;
+    const char *new_display; // [<width>x<height>][/<dpi>] parsed by the server
+    const char *start_app;
+    bool vd_destroy_content;
+    bool vd_system_decorations;
+    bool camera_torch;
+    bool keep_active;
+    bool flex_display;
+    bool ignore_video_encoder_constraints;
+    bool update_terminal_title;
 };
 
 extern const struct scrcpy_options scrcpy_options_default;

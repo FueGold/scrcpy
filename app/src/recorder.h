@@ -4,9 +4,10 @@
 #include "common.h"
 
 #include <stdbool.h>
+#include <stdint.h>
+#include <libavcodec/packet.h>
 #include <libavformat/avformat.h>
 
-#include "coords.h"
 #include "options.h"
 #include "trait/packet_sink.h"
 #include "util/thread.h"
@@ -52,6 +53,7 @@ struct sc_recorder {
     bool video_init;
     bool audio_init;
 
+    bool video_expects_config_packet;
     bool audio_expects_config_packet;
 
     struct sc_recorder_stream video_stream;

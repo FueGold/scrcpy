@@ -1,5 +1,7 @@
 #include "options.h"
 
+#include <stddef.h>
+
 const struct scrcpy_options scrcpy_options_default = {
     .serial = NULL,
     .crop = NULL,
@@ -14,6 +16,7 @@ const struct scrcpy_options scrcpy_options_default = {
     .camera_id = NULL,
     .camera_size = NULL,
     .camera_ar = NULL,
+    .camera_zoom = NULL,
     .camera_fps = 0,
     .log_level = SC_LOG_LEVEL_INFO,
     .video_codec = SC_CODEC_H264,
@@ -46,22 +49,28 @@ const struct scrcpy_options scrcpy_options_default = {
     .tunnel_host = 0,
     .tunnel_port = 0,
     .shortcut_mods = SC_SHORTCUT_MOD_LALT | SC_SHORTCUT_MOD_LSUPER,
+    .min_size_alignment = 1,
     .max_size = 0,
     .video_bit_rate = 0,
     .audio_bit_rate = 0,
     .max_fps = NULL,
-    .lock_video_orientation = SC_LOCK_VIDEO_ORIENTATION_UNLOCKED,
+    .capture_orientation = SC_ORIENTATION_0,
+    .capture_orientation_lock = SC_ORIENTATION_UNLOCKED,
     .display_orientation = SC_ORIENTATION_0,
     .record_orientation = SC_ORIENTATION_0,
+    .display_ime_policy = SC_DISPLAY_IME_POLICY_UNDEFINED,
+    .render_fit = SC_RENDER_FIT_AUTO,
     .window_x = SC_WINDOW_POSITION_UNDEFINED,
     .window_y = SC_WINDOW_POSITION_UNDEFINED,
     .window_width = 0,
     .window_height = 0,
     .display_id = 0,
-    .display_buffer = 0,
+    .background_color = 0x222222, // dark gray
+    .video_buffer = 0,
     .audio_buffer = -1, // depends on the audio format,
-    .audio_output_buffer = SC_TICK_FROM_MS(5),
+    .audio_output_buffer = SC_TICK_FROM_MS(10),
     .time_limit = 0,
+    .screen_off_timeout = -1,
 #ifdef HAVE_V4L2
     .v4l2_device = NULL,
     .v4l2_buffer = 0,
@@ -77,6 +86,7 @@ const struct scrcpy_options scrcpy_options_default = {
     .audio_playback = true,
     .turn_screen_off = false,
     .key_inject_mode = SC_KEY_INJECT_MODE_MIXED,
+    .window_aspect_ratio_lock = true,
     .window_borderless = false,
     .mipmaps = true,
     .stay_awake = false,
@@ -103,6 +113,16 @@ const struct scrcpy_options scrcpy_options_default = {
     .window = true,
     .mouse_hover = true,
     .audio_dup = false,
+    .new_display = NULL,
+    .start_app = NULL,
+    .angle = NULL,
+    .vd_destroy_content = true,
+    .vd_system_decorations = true,
+    .camera_torch = false,
+    .keep_active = false,
+    .flex_display = false,
+    .ignore_video_encoder_constraints = false,
+    .update_terminal_title = true,
 };
 
 enum sc_orientation

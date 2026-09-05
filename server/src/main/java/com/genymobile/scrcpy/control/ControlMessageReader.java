@@ -1,7 +1,7 @@
 package com.genymobile.scrcpy.control;
 
+import com.genymobile.scrcpy.model.Position;
 import com.genymobile.scrcpy.util.Binary;
-import com.genymobile.scrcpy.device.Position;
 
 import java.io.BufferedInputStream;
 import java.io.DataInputStream;
@@ -39,13 +39,16 @@ public class ControlMessageReader {
                 return parseGetClipboard();
             case ControlMessage.TYPE_SET_CLIPBOARD:
                 return parseSetClipboard();
-            case ControlMessage.TYPE_SET_SCREEN_POWER_MODE:
-                return parseSetScreenPowerMode();
+            case ControlMessage.TYPE_SET_DISPLAY_POWER:
+                return parseSetDisplayPower();
             case ControlMessage.TYPE_EXPAND_NOTIFICATION_PANEL:
             case ControlMessage.TYPE_EXPAND_SETTINGS_PANEL:
             case ControlMessage.TYPE_COLLAPSE_PANELS:
             case ControlMessage.TYPE_ROTATE_DEVICE:
             case ControlMessage.TYPE_OPEN_HARD_KEYBOARD_SETTINGS:
+            case ControlMessage.TYPE_RESET_VIDEO:
+            case ControlMessage.TYPE_CAMERA_ZOOM_IN:
+            case ControlMessage.TYPE_CAMERA_ZOOM_OUT:
                 return ControlMessage.createEmpty(type);
             case ControlMessage.TYPE_UHID_CREATE:
                 return parseUhidCreate();
@@ -53,6 +56,14 @@ public class ControlMessageReader {
                 return parseUhidInput();
             case ControlMessage.TYPE_UHID_DESTROY:
                 return parseUhidDestroy();
+            case ControlMessage.TYPE_START_APP:
+                return parseStartApp();
+            case ControlMessage.TYPE_CAMERA_SET_TORCH:
+                return parseCameraSetTorch();
+            case ControlMessage.TYPE_RESIZE_DISPLAY:
+                return parseResizeDisplay();
+            case ControlMessage.TYPE_SCAN_FILE:
+                return parseScanFile();
             default:
                 throw new ControlProtocolException("Unknown event type: " + type);
         }
@@ -109,8 +120,9 @@ public class ControlMessageReader {
 
     private ControlMessage parseInjectScrollEvent() throws IOException {
         Position position = parsePosition();
-        float hScroll = Binary.i16FixedPointToFloat(dis.readShort());
-        float vScroll = Binary.i16FixedPointToFloat(dis.readShort());
+        // Binary.i16FixedPointToFloat() decodes values assuming the full range is [-1, 1], but the actual range is [-16, 16].
+        float hScroll = Binary.i16FixedPointToFloat(dis.readShort()) * 16;
+        float vScroll = Binary.i16FixedPointToFloat(dis.readShort()) * 16;
         int buttons = dis.readInt();
         return ControlMessage.createInjectScrollEvent(position, hScroll, vScroll, buttons);
     }
@@ -132,16 +144,18 @@ public class ControlMessageReader {
         return ControlMessage.createSetClipboard(sequence, text, paste);
     }
 
-    private ControlMessage parseSetScreenPowerMode() throws IOException {
-        int mode = dis.readUnsignedByte();
-        return ControlMessage.createSetScreenPowerMode(mode);
+    private ControlMessage parseSetDisplayPower() throws IOException {
+        boolean on = dis.readBoolean();
+        return ControlMessage.createSetDisplayPower(on);
     }
 
     private ControlMessage parseUhidCreate() throws IOException {
         int id = dis.readUnsignedShort();
+        int vendorId = dis.readUnsignedShort();
+        int productId = dis.readUnsignedShort();
         String name = parseString(1);
         byte[] data = parseByteArray(2);
-        return ControlMessage.createUhidCreate(id, name, data);
+        return ControlMessage.createUhidCreate(id, vendorId, productId, name, data);
     }
 
     private ControlMessage parseUhidInput() throws IOException {
@@ -153,6 +167,27 @@ public class ControlMessageReader {
     private ControlMessage parseUhidDestroy() throws IOException {
         int id = dis.readUnsignedShort();
         return ControlMessage.createUhidDestroy(id);
+    }
+
+    private ControlMessage parseStartApp() throws IOException {
+        String name = parseString(1);
+        return ControlMessage.createStartApp(name);
+    }
+
+    private ControlMessage parseCameraSetTorch() throws IOException {
+        boolean on = dis.readBoolean();
+        return ControlMessage.createCameraSetTorch(on);
+    }
+
+    private ControlMessage parseResizeDisplay() throws IOException {
+        int width = dis.readUnsignedShort();
+        int height = dis.readUnsignedShort();
+        return ControlMessage.createResizeDisplay(width, height);
+    }
+
+    private ControlMessage parseScanFile() throws IOException {
+        String path = parseString();
+        return ControlMessage.createScanFile(path);
     }
 
     private Position parsePosition() throws IOException {

@@ -5,6 +5,8 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
+#include <sys/types.h>
 
 /* Stringify a numeric value  */
 #define SC_STR(s) SC_XSTR(s)
@@ -31,12 +33,13 @@ size_t
 sc_str_join(char *dst, const char *const tokens[], char sep, size_t n);
 
 /**
- * Quote a string
+ * Concat two strings
  *
- * Return a new allocated string, surrounded with quotes (`"`).
+ * Return a new allocated string, contanining the concatenation of the two
+ * input strings.
  */
 char *
-sc_str_quote(const char *src);
+sc_str_concat(const char *start, const char *end);
 
 /**
  * Parse `s` as an integer into `out`

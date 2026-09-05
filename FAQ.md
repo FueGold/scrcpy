@@ -141,12 +141,13 @@ On Windows, if `scrcpy --otg` (or `--keyboard=aoa`/`--mouse=aoa`) results in:
 
 (or if only unrelated USB devices are detected), there might be drivers issues.
 
-Please read [#3654], in particular [this comment][#3654-comment1] and [the next
-one][#3654-comment2].
+Please read [#3654], in particular [this comment][#3654-comment1], [the next
+one][#3654-comment2] and [this one][#3654-comment3].
 
 [#3654]: https://github.com/Genymobile/scrcpy/issues/3654
 [#3654-comment1]: https://github.com/Genymobile/scrcpy/issues/3654#issuecomment-1369278232
 [#3654-comment2]: https://github.com/Genymobile/scrcpy/issues/3654#issuecomment-1369295011
+[#3654-comment3]: https://github.com/Genymobile/scrcpy/issues/3654#issuecomment-2613219725
 
 
 ## Control issues
@@ -166,14 +167,13 @@ Rebooting the device is necessary once this option is set.
 
 ### Special characters do not work
 
-The default text injection method is [limited to ASCII characters][text-input].
-A trick allows to also inject some [accented characters][accented-characters],
+The default text injection method is limited to ASCII characters. A trick allows
+to also inject some [accented characters][accented-characters],
 but that's all. See [#37].
 
 To avoid the problem, [change the keyboard mode to simulate a physical
 keyboard][hid].
 
-[text-input]: https://github.com/Genymobile/scrcpy/issues?q=is%3Aopen+is%3Aissue+label%3Aunicode
 [accented-characters]: https://blog.rom1v.com/2018/03/introducing-scrcpy/#handle-accented-characters
 [#37]: https://github.com/Genymobile/scrcpy/issues/37
 [hid]: doc/keyboard.md#physical-keyboard-simulation

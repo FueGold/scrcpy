@@ -3,12 +3,11 @@
 
 #include "common.h"
 
+#include <libavcodec/avcodec.h>
+
+#include "coords.h"
 #include "trait/frame_source.h"
 #include "trait/packet_sink.h"
-
-#include <stdbool.h>
-#include <libavcodec/avcodec.h>
-#include <libavformat/avformat.h>
 
 struct sc_decoder {
     struct sc_packet_sink packet_sink; // packet sink trait
@@ -18,6 +17,9 @@ struct sc_decoder {
 
     AVCodecContext *ctx;
     AVFrame *frame;
+
+    struct sc_stream_session session; // only initialized for video stream
+    struct sc_size frame_size;
 };
 
 // The name must be statically allocated (e.g. a string literal)

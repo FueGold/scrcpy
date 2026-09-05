@@ -1,6 +1,12 @@
 #include "keyboard_uhid.h"
 
+#include <assert.h>
+#include <string.h>
+#include <SDL3/SDL_keyboard.h>
+#include <SDL3/SDL_keycode.h>
+
 #include "util/log.h"
+#include "util/thread.h"
 
 /** Downcast key processor to keyboard_uhid */
 #define DOWNCAST(KP) container_of(KP, struct sc_keyboard_uhid, key_processor)
@@ -54,7 +60,7 @@ sc_key_processor_process_key(struct sc_key_processor *kp,
                              uint64_t ack_to_wait) {
     (void) ack_to_wait;
 
-    assert(sc_thread_get_id() == SC_MAIN_THREAD_ID);
+    assert(sc_thread_is_main());
 
     if (event->repeat) {
         // In USB HID protocol, key repeat is handled by the host (Android), so
@@ -98,7 +104,7 @@ sc_keyboard_uhid_to_sc_mod(uint8_t hid_led) {
 void
 sc_keyboard_uhid_process_hid_output(struct sc_keyboard_uhid *kb,
                                     const uint8_t *data, size_t size) {
-    assert(sc_thread_get_id() == SC_MAIN_THREAD_ID);
+    assert(sc_thread_is_main());
 
     assert(size);
 
@@ -141,7 +147,9 @@ sc_keyboard_uhid_init(struct sc_keyboard_uhid *kb,
     struct sc_control_msg msg;
     msg.type = SC_CONTROL_MSG_TYPE_UHID_CREATE;
     msg.uhid_create.id = SC_HID_ID_KEYBOARD;
-    msg.uhid_create.name = hid_open.name;
+    msg.uhid_create.vendor_id = 0;
+    msg.uhid_create.product_id = 0;
+    msg.uhid_create.name = NULL;
     msg.uhid_create.report_desc = hid_open.report_desc;
     msg.uhid_create.report_desc_size = hid_open.report_desc_size;
     if (!sc_controller_push_msg(controller, &msg)) {

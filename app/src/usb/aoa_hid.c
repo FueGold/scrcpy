@@ -1,13 +1,16 @@
-#include "util/log.h"
+#include "aoa_hid.h"
 
 #include <assert.h>
 #include <inttypes.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <sys/types.h>
+#include <libusb-1.0/libusb.h>
 
-#include "aoa_hid.h"
 #include "events.h"
 #include "util/log.h"
 #include "util/str.h"
+#include "util/tick.h"
 #include "util/vector.h"
 
 // See <https://source.android.com/devices/accessories/aoa2#hid-support>.
@@ -235,7 +238,7 @@ sc_aoa_push_input_with_ack_to_wait(struct sc_aoa *aoa,
         bool was_empty = sc_vecdeque_is_empty(&aoa->queue);
 
         struct sc_aoa_event *aoa_event =
-            sc_vecdeque_push_hole_noresize(&aoa->queue);
+            sc_vecdeque_push_uninitialized_noresize(&aoa->queue);
         aoa_event->type = SC_AOA_EVENT_TYPE_INPUT;
         aoa_event->input.hid = *hid_input;
         aoa_event->input.ack_to_wait = ack_to_wait;
@@ -264,7 +267,8 @@ sc_aoa_push_open(struct sc_aoa *aoa, const struct sc_hid_open *hid_open,
 
     // an OPEN event is non-droppable, so push it to the queue even above the
     // SC_AOA_EVENT_QUEUE_LIMIT
-    struct sc_aoa_event *aoa_event = sc_vecdeque_push_hole(&aoa->queue);
+    struct sc_aoa_event *aoa_event =
+        sc_vecdeque_push_uninitialized(&aoa->queue);
     if (!aoa_event) {
         LOG_OOM();
         sc_mutex_unlock(&aoa->mutex);
@@ -295,7 +299,8 @@ sc_aoa_push_close(struct sc_aoa *aoa, const struct sc_hid_close *hid_close) {
 
     // a CLOSE event is non-droppable, so push it to the queue even above the
     // SC_AOA_EVENT_QUEUE_LIMIT
-    struct sc_aoa_event *aoa_event = sc_vecdeque_push_hole(&aoa->queue);
+    struct sc_aoa_event *aoa_event =
+        sc_vecdeque_push_uninitialized(&aoa->queue);
     if (!aoa_event) {
         LOG_OOM();
         sc_mutex_unlock(&aoa->mutex);

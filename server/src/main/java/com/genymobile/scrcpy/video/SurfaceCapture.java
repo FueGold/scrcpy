@@ -1,45 +1,49 @@
 package com.genymobile.scrcpy.video;
 
-import com.genymobile.scrcpy.device.Size;
+import com.genymobile.scrcpy.model.ConfigurationException;
+import com.genymobile.scrcpy.model.Size;
 
 import android.view.Surface;
 
 import java.io.IOException;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * A video source which can be rendered on a Surface for encoding.
  */
 public abstract class SurfaceCapture {
 
-    private final AtomicBoolean resetCapture = new AtomicBoolean();
+    private CaptureControl captureControl;
 
     /**
-     * Request the encoding session to be restarted, for example if the capture implementation detects that the video source size has changed (on
-     * device rotation for example).
+     * Called once before the first capture starts.
      */
-    protected void requestReset() {
-        resetCapture.set(true);
+    public final void init(CaptureControl captureControl, VideoConstraints videoConstraints) throws ConfigurationException, IOException {
+        this.captureControl = captureControl;
+        init(videoConstraints);
+    }
+
+    public CaptureControl getCaptureControl() {
+        return captureControl;
     }
 
     /**
-     * Consume the reset request (intended to be called by the encoder).
+     * Called once before the first capture starts.
      *
-     * @return {@code true} if a reset request was pending, {@code false} otherwise.
+     * @param videoConstraints the video constraints
      */
-    public boolean consumeReset() {
-        return resetCapture.getAndSet(false);
-    }
+    protected abstract void init(VideoConstraints videoConstraints) throws ConfigurationException, IOException;
 
     /**
-     * Called once before the capture starts.
-     */
-    public abstract void init() throws IOException;
-
-    /**
-     * Called after the capture ends (if and only if {@link #init()} has been called).
+     * Called after the last capture ends (if and only if {@link #init(VideoConstraints)} has been called).
      */
     public abstract void release();
+
+    /**
+     * Called once before each capture starts, before {@link #getSize()}.
+     */
+    public void prepare() throws ConfigurationException, IOException {
+        // empty by default
+    }
 
     /**
      * Start the capture to the target surface.
@@ -49,18 +53,18 @@ public abstract class SurfaceCapture {
     public abstract void start(Surface surface) throws IOException;
 
     /**
+     * Stop the capture.
+     */
+    public void stop() {
+        // Do nothing by default
+    }
+
+    /**
      * Return the video size
      *
      * @return the video size
      */
     public abstract Size getSize();
-
-    /**
-     * Set the maximum capture size (set by the encoder if it does not support the current size).
-     *
-     * @param maxSize Maximum size
-     */
-    public abstract boolean setMaxSize(int maxSize);
 
     /**
      * Indicate if the capture has been closed internally.
@@ -70,4 +74,12 @@ public abstract class SurfaceCapture {
     public boolean isClosed() {
         return false;
     }
+
+    /**
+     * Set new video constraints (called by the encoder to retry when encoding fails)
+     *
+     * @param videoConstraints the video constraints
+     * @return {@code true} if the implementation accepts the new constraints, {@code false} otherwise.
+     */
+    protected abstract boolean applyNewVideoConstraints(VideoConstraints videoConstraints);
 }

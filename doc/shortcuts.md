@@ -23,13 +23,15 @@ _<kbd>[Super]</kbd> is typically the <kbd>Windows</kbd> or <kbd>Cmd</kbd> key._
 
  | Action                                      |   Shortcut
  | ------------------------------------------- |:-----------------------------
- | Switch fullscreen mode                      | <kbd>MOD</kbd>+<kbd>f</kbd>
+ | Quit                                        | <kbd>MOD</kbd>+<kbd>q</kbd>
+ | Switch fullscreen mode                      | <kbd>MOD</kbd>+<kbd>f</kbd> \| <kbd>F11</kbd>
  | Rotate display left                         | <kbd>MOD</kbd>+<kbd>←</kbd> _(left)_
  | Rotate display right                        | <kbd>MOD</kbd>+<kbd>→</kbd> _(right)_
  | Flip display horizontally                   | <kbd>MOD</kbd>+<kbd>Shift</kbd>+<kbd>←</kbd> _(left)_ \| <kbd>MOD</kbd>+<kbd>Shift</kbd>+<kbd>→</kbd> _(right)_
  | Flip display vertically                     | <kbd>MOD</kbd>+<kbd>Shift</kbd>+<kbd>↑</kbd> _(up)_ \| <kbd>MOD</kbd>+<kbd>Shift</kbd>+<kbd>↓</kbd> _(down)_
  | Pause or re-pause display                   | <kbd>MOD</kbd>+<kbd>z</kbd>
  | Unpause display                             | <kbd>MOD</kbd>+<kbd>Shift</kbd>+<kbd>z</kbd>
+ | Reset video capture/encoding                | <kbd>MOD</kbd>+<kbd>Shift</kbd>+<kbd>r</kbd>
  | Resize window to 1:1 (pixel-perfect)        | <kbd>MOD</kbd>+<kbd>g</kbd>
  | Resize window to remove black borders       | <kbd>MOD</kbd>+<kbd>w</kbd> \| _Double-left-click¹_
  | Click on `HOME`                             | <kbd>MOD</kbd>+<kbd>h</kbd> \| _Middle-click_
@@ -53,9 +55,14 @@ _<kbd>[Super]</kbd> is typically the <kbd>Windows</kbd> or <kbd>Cmd</kbd> key._
  | Open keyboard settings (HID keyboard only)  | <kbd>MOD</kbd>+<kbd>k</kbd>
  | Enable/disable FPS counter (on stdout)      | <kbd>MOD</kbd>+<kbd>i</kbd>
  | Pinch-to-zoom/rotate                        | <kbd>Ctrl</kbd>+_click-and-move_
- | Tilt (slide vertically with 2 fingers)      | <kbd>Shift</kbd>+_click-and-move_
+ | Tilt vertically (slide with 2 fingers)      | <kbd>Shift</kbd>+_click-and-move_
+ | Tilt horizontally (slide with 2 fingers)    | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+_click-and-move_
  | Drag & drop APK file                        | Install APK from computer
  | Drag & drop non-APK file                    | [Push file to device](control.md#push-file-to-device)
+ | Turn on the camera torch (camera mode only) | <kbd>MOD</kbd>+<kbd>t</kbd>
+ | Turn off the camera torch (camera mode only)| <kbd>MOD</kbd>+<kbd>Shift</kbd>+<kbd>t</kbd>
+ | Zoom camera in (camera mode only)           | <kbd>MOD</kbd>+<kbd>↑</kbd> _(up)_
+ | Zoom camera out (camera mode only)          | <kbd>MOD</kbd>+<kbd>↓</kbd> _(down)_
 
 _¹Double-click on black borders to remove them._  
 _²Right-click turns the screen on if it was off, presses BACK otherwise._  

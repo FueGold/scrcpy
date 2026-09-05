@@ -23,14 +23,20 @@ To control the device without mirroring:
 scrcpy --no-video --no-audio
 ```
 
-By default, mouse mode is switched to UHID if video mirroring is disabled (a
-relative mouse mode is required).
+By default, the mouse is disabled when video playback is turned off.
+
+To control the device using a relative mouse, enable UHID mouse mode:
+
+```bash
+scrcpy --no-video --no-audio --mouse=uhid
+scrcpy --no-video --no-audio -M  # short version
+```
 
 To also use a UHID keyboard, set it explicitly:
 
 ```bash
-scrcpy --no-video --no-audio --keyboard=uhid
-scrcpy --no-video --no-audio -K  # short version
+scrcpy --no-video --no-audio --mouse=uhid --keyboard=uhid
+scrcpy --no-video --no-audio -MK  # short version
 ```
 
 To use AOA instead (over USB only):
@@ -94,14 +100,18 @@ the content (if supported by the app) relative to the center of the screen.
 
 https://github.com/Genymobile/scrcpy/assets/543275/26c4a920-9805-43f1-8d4c-608752d04767
 
-To simulate a tilt gesture: <kbd>Shift</kbd>+_click-and-move-up-or-down_.
+To simulate a vertical tilt gesture: <kbd>Shift</kbd>+_click-and-move-up-or-down_.
 
 https://github.com/Genymobile/scrcpy/assets/543275/1e252341-4a90-4b29-9d11-9153b324669f
+
+Similarly, to simulate a horizontal tilt gesture:
+<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+_click-and-move-left-or-right_.
 
 Technically, _scrcpy_ generates additional touch events from a "virtual finger"
 at a location inverted through the center of the screen. When pressing
 <kbd>Ctrl</kbd> the _x_ and _y_ coordinates are inverted. Using <kbd>Shift</kbd>
-only inverts _x_.
+only inverts _x_, whereas using <kbd>Ctrl</kbd>+<kbd>Shift</kbd> only inverts
+_y_.
 
 This only works for the default mouse mode (`--mouse=sdk`).
 
@@ -128,3 +138,11 @@ The target directory can be changed on start:
 ```bash
 scrcpy --push-target=/sdcard/Movies/
 ```
+
+After each successful push, _scrcpy_ requests the media scanner to scan the
+"push directory" so that the new files immediately appear in media apps.
+
+Note that some gallery apps only show files from a fixed list of folders
+(typically `DCIM/Camera`) in their main view; the file is then still reachable
+through the system Photo Picker and the folder view, but may not appear on the
+gallery home screen.

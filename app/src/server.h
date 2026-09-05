@@ -1,19 +1,17 @@
-#ifndef SERVER_H
-#define SERVER_H
+#ifndef SC_SERVER_H
+#define SC_SERVER_H
 
 #include "common.h"
 
-#include <stdatomic.h>
 #include <stdbool.h>
 #include <stdint.h>
 
 #include "adb/adb_tunnel.h"
-#include "coords.h"
 #include "options.h"
 #include "util/intr.h"
-#include "util/log.h"
 #include "util/net.h"
 #include "util/thread.h"
+#include "util/tick.h"
 
 #define SC_DEVICE_NAME_FIELD_LENGTH 64
 struct sc_server_info {
@@ -37,17 +35,24 @@ struct sc_server_params {
     const char *camera_id;
     const char *camera_size;
     const char *camera_ar;
+    const char *camera_zoom;
     uint16_t camera_fps;
     struct sc_port_range port_range;
     uint32_t tunnel_host;
     uint16_t tunnel_port;
     uint16_t max_size;
+    uint8_t min_size_alignment;
     uint32_t video_bit_rate;
     uint32_t audio_bit_rate;
     const char *max_fps; // float to be parsed by the server
-    int8_t lock_video_orientation;
+    const char *angle; // float to be parsed by the server
+    sc_tick screen_off_timeout;
+    enum sc_orientation capture_orientation;
+    enum sc_orientation_lock capture_orientation_lock;
     bool control;
     uint32_t display_id;
+    const char *new_display;
+    enum sc_display_ime_policy display_ime_policy;
     bool video;
     bool audio;
     bool audio_dup;
@@ -65,6 +70,12 @@ struct sc_server_params {
     bool power_on;
     bool kill_adb_on_close;
     bool camera_high_speed;
+    bool camera_torch;
+    bool vd_destroy_content;
+    bool vd_system_decorations;
+    bool keep_active;
+    bool flex_display;
+    bool ignore_video_encoder_constraints;
     uint8_t list;
 };
 

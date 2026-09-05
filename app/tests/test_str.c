@@ -131,12 +131,12 @@ static void test_join_truncated_after_sep(void) {
     assert(!strcmp("abc de ", s));
 }
 
-static void test_quote(void) {
-    const char *s = "abcde";
-    char *out = sc_str_quote(s);
+static void test_concat(void) {
+    const char *s = "2024:11";
+    char *out = sc_str_concat("my-prefix:", s);
 
-    // add '"' at the beginning and the end
-    assert(!strcmp("\"abcde\"", out));
+    // contains the concat
+    assert(!strcmp("my-prefix:2024:11", out));
 
     free(out);
 }
@@ -388,7 +388,7 @@ int main(int argc, char *argv[]) {
     test_join_truncated_in_token();
     test_join_truncated_before_sep();
     test_join_truncated_after_sep();
-    test_quote();
+    test_concat();
     test_utf8_truncate();
     test_parse_integer();
     test_parse_integers();

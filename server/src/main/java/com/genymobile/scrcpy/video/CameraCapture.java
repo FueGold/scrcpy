@@ -1,8 +1,17 @@
 package com.genymobile.scrcpy.video;
 
+import com.genymobile.scrcpy.AndroidVersions;
+import com.genymobile.scrcpy.Options;
+import com.genymobile.scrcpy.model.ConfigurationException;
+import com.genymobile.scrcpy.model.Orientation;
+import com.genymobile.scrcpy.model.Size;
+import com.genymobile.scrcpy.opengl.AffineOpenGLFilter;
+import com.genymobile.scrcpy.opengl.OpenGLFilter;
+import com.genymobile.scrcpy.opengl.OpenGLRunner;
+import com.genymobile.scrcpy.util.AffineMatrix;
 import com.genymobile.scrcpy.util.HandlerExecutor;
 import com.genymobile.scrcpy.util.Ln;
-import com.genymobile.scrcpy.device.Size;
+import com.genymobile.scrcpy.util.LogUtils;
 import com.genymobile.scrcpy.wrappers.ServiceManager;
 
 import android.annotation.SuppressLint;
@@ -20,7 +29,6 @@ import android.hardware.camera2.params.OutputConfiguration;
 import android.hardware.camera2.params.SessionConfiguration;
 import android.hardware.camera2.params.StreamConfigurationMap;
 import android.media.MediaCodec;
-import android.os.Build;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.util.Range;
@@ -28,6 +36,7 @@ import android.view.Surface;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -38,16 +47,36 @@ import java.util.stream.Stream;
 
 public class CameraCapture extends SurfaceCapture {
 
+    public static final float[] VFLIP_MATRIX = {
+            1, 0, 0, 0, // column 1
+            0, -1, 0, 0, // column 2
+            0, 0, 1, 0, // column 3
+            0, 1, 0, 1, // column 4
+    };
+
+    private static final float ZOOM_FACTOR = 1 + 1 / 16f;
+
     private final String explicitCameraId;
     private final CameraFacing cameraFacing;
     private final Size explicitSize;
-    private int maxSize;
     private final CameraAspectRatio aspectRatio;
     private final int fps;
     private final boolean highSpeed;
+    private final Rect crop;
+    private final Orientation captureOrientation;
+    private final float angle;
+    private final boolean initialTorch;
+    private float zoom;
+
+    private VideoConstraints videoConstraints;
 
     private String cameraId;
-    private Size size;
+    private Size captureSize;
+    private Size videoSize; // after OpenGL transforms
+    private Range<Float> zoomRange;
+
+    private AffineMatrix transform;
+    private OpenGLRunner glRunner;
 
     private HandlerThread cameraThread;
     private Handler cameraHandler;
@@ -56,19 +85,30 @@ public class CameraCapture extends SurfaceCapture {
 
     private final AtomicBoolean disconnected = new AtomicBoolean();
 
-    public CameraCapture(String explicitCameraId, CameraFacing cameraFacing, Size explicitSize, int maxSize, CameraAspectRatio aspectRatio, int fps,
-            boolean highSpeed) {
-        this.explicitCameraId = explicitCameraId;
-        this.cameraFacing = cameraFacing;
-        this.explicitSize = explicitSize;
-        this.maxSize = maxSize;
-        this.aspectRatio = aspectRatio;
-        this.fps = fps;
-        this.highSpeed = highSpeed;
+    // The following fields must be accessed only from the camera thread
+    private boolean started;
+    private CaptureRequest.Builder requestBuilder;
+    private CameraCaptureSession currentSession;
+
+    public CameraCapture(Options options) {
+        this.explicitCameraId = options.getCameraId();
+        this.cameraFacing = options.getCameraFacing();
+        this.explicitSize = options.getCameraSize();
+        this.aspectRatio = options.getCameraAspectRatio();
+        this.fps = options.getCameraFps();
+        this.highSpeed = options.getCameraHighSpeed();
+        this.crop = options.getCrop();
+        this.captureOrientation = options.getCaptureOrientation();
+        assert captureOrientation != null;
+        this.angle = options.getAngle();
+        this.initialTorch = options.getCameraTorch();
+        this.zoom = options.getCameraZoom();
     }
 
     @Override
-    public void init() throws IOException {
+    protected void init(VideoConstraints videoConstraints) throws ConfigurationException, IOException {
+        this.videoConstraints = videoConstraints;
+
         cameraThread = new HandlerThread("camera");
         cameraThread.start();
         cameraHandler = new Handler(cameraThread.getLooper());
@@ -77,12 +117,7 @@ public class CameraCapture extends SurfaceCapture {
         try {
             cameraId = selectCamera(explicitCameraId, cameraFacing);
             if (cameraId == null) {
-                throw new IOException("No matching camera found");
-            }
-
-            size = selectSize(cameraId, explicitSize, maxSize, aspectRatio, highSpeed);
-            if (size == null) {
-                throw new IOException("Could not select camera size");
+                throw new ConfigurationException("No matching camera found");
             }
 
             Ln.i("Using camera '" + cameraId + "'");
@@ -92,14 +127,52 @@ public class CameraCapture extends SurfaceCapture {
         }
     }
 
-    private static String selectCamera(String explicitCameraId, CameraFacing cameraFacing) throws CameraAccessException {
-        if (explicitCameraId != null) {
-            return explicitCameraId;
+    @Override
+    public void prepare() throws IOException {
+        try {
+            int maxSize = videoConstraints.getMaxSize();
+            captureSize = selectSize(cameraId, explicitSize, maxSize, aspectRatio, highSpeed);
+            if (captureSize == null) {
+                throw new IOException("Could not select camera size");
+            }
+        } catch (CameraAccessException e) {
+            throw new IOException(e);
         }
 
+        VideoFilter filter = new VideoFilter(captureSize);
+
+        if (crop != null) {
+            filter.addCrop(crop, false);
+        }
+
+        if (captureOrientation != Orientation.Orient0) {
+            filter.addOrientation(captureOrientation);
+        }
+
+        filter.addAngle(angle);
+
+        transform = filter.getInverseTransform();
+        videoSize = filter.getOutputSize().align(videoConstraints.getAlignment());
+
+        if (!videoSize.equals(captureSize) && transform == null) {
+            // The camera stream can only be rendered on a surface matching the input size.
+            // If the video constraints change the size, an intermediate OpenGL filter is required.
+            transform = AffineMatrix.IDENTITY;
+        }
+    }
+
+    private static String selectCamera(String explicitCameraId, CameraFacing cameraFacing) throws CameraAccessException, ConfigurationException {
         CameraManager cameraManager = ServiceManager.getCameraManager();
 
         String[] cameraIds = cameraManager.getCameraIdList();
+        if (explicitCameraId != null) {
+            if (!Arrays.asList(cameraIds).contains(explicitCameraId)) {
+                Ln.e("Camera with id " + explicitCameraId + " not found\n" + LogUtils.buildCameraListMessage(false));
+                throw new ConfigurationException("Camera id not found");
+            }
+            return explicitCameraId;
+        }
+
         if (cameraFacing == null) {
             // Use the first one
             return cameraIds.length > 0 ? cameraIds[0] : null;
@@ -118,7 +191,7 @@ public class CameraCapture extends SurfaceCapture {
         return null;
     }
 
-    @TargetApi(Build.VERSION_CODES.N)
+    @TargetApi(AndroidVersions.API_24_ANDROID_7_0)
     private static Size selectSize(String cameraId, Size explicitSize, int maxSize, CameraAspectRatio aspectRatio, boolean highSpeed)
             throws CameraAccessException {
         if (explicitSize != null) {
@@ -199,14 +272,99 @@ public class CameraCapture extends SurfaceCapture {
         return ratio.getAspectRatio();
     }
 
+    @TargetApi(AndroidVersions.API_30_ANDROID_11)
     @Override
     public void start(Surface surface) throws IOException {
+        if (transform != null) {
+            assert glRunner == null;
+            OpenGLFilter glFilter = new AffineOpenGLFilter(transform);
+            // The transform matrix returned by SurfaceTexture is incorrect for camera capture (it often contains an additional unexpected 90°
+            // rotation). Use a vertical flip transform matrix instead.
+            glRunner = new OpenGLRunner(glFilter, VFLIP_MATRIX);
+            surface = glRunner.start(captureSize, videoSize, surface);
+        }
+
+        cameraHandler.post(() -> {
+            assertCameraThread();
+            started = true;
+        });
+
+        Surface captureSurface = surface;
+        OutputConfiguration outputConfig = new OutputConfiguration(captureSurface);
+        List<OutputConfiguration> outputs = Collections.singletonList(outputConfig);
+        int sessionType = highSpeed ? SessionConfiguration.SESSION_HIGH_SPEED : SessionConfiguration.SESSION_REGULAR;
+        SessionConfiguration sessionConfig = new SessionConfiguration(sessionType, outputs, cameraExecutor, new CameraCaptureSession.StateCallback() {
+            @Override
+            public void onConfigured(CameraCaptureSession session) {
+                assertCameraThread();
+                if (!started) {
+                    // Stopped on the encoder thread between the call to start() and this callback
+                    return;
+                }
+
+                CameraManager cameraManager = ServiceManager.getCameraManager();
+                try {
+                    CameraCharacteristics characteristics = cameraManager.getCameraCharacteristics(cameraId);
+                    zoomRange = characteristics.get(CameraCharacteristics.CONTROL_ZOOM_RATIO_RANGE);
+                } catch (CameraAccessException e) {
+                    Ln.w("Could not get camera characteristics");
+                }
+
+                try {
+                    requestBuilder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_RECORD);
+                    requestBuilder.addTarget(captureSurface);
+
+                    if (fps > 0) {
+                        requestBuilder.set(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, new Range<>(fps, fps));
+                    }
+                    if (initialTorch) {
+                        Ln.i("Turn camera torch on");
+                        requestBuilder.set(CaptureRequest.FLASH_MODE, CaptureRequest.FLASH_MODE_TORCH);
+                    }
+                    if (zoom != 1) {
+                        zoom = clampZoom(zoom);
+                        Ln.i("Set camera zoom: " + zoom);
+                        requestBuilder.set(CaptureRequest.CONTROL_ZOOM_RATIO, zoom);
+                    }
+
+                    CaptureRequest request = requestBuilder.build();
+                    setRepeatingRequest(session, request);
+                    currentSession = session;
+                } catch (CameraAccessException e) {
+                    Ln.e("Camera error", e);
+                    disconnected.set(true);
+                    getCaptureControl().reset(CaptureControl.RESET_REASON_TERMINATED);
+                }
+            }
+
+            @Override
+            public void onConfigureFailed(CameraCaptureSession session) {
+                Ln.e("Camera configuration error");
+                disconnected.set(true);
+                getCaptureControl().reset(CaptureControl.RESET_REASON_TERMINATED);
+            }
+        });
+
         try {
-            CameraCaptureSession session = createCaptureSession(cameraDevice, surface);
-            CaptureRequest request = createCaptureRequest(surface);
-            setRepeatingRequest(session, request);
-        } catch (CameraAccessException | InterruptedException e) {
+            cameraDevice.createCaptureSession(sessionConfig);
+        } catch (CameraAccessException e) {
+            stop();
             throw new IOException(e);
+        }
+    }
+
+    @Override
+    public void stop() {
+        cameraHandler.post(() -> {
+            assertCameraThread();
+            currentSession = null;
+            requestBuilder = null;
+            started = false;
+        });
+
+        if (glRunner != null) {
+            glRunner.stopAndRelease();
+            glRunner = null;
         }
     }
 
@@ -222,27 +380,21 @@ public class CameraCapture extends SurfaceCapture {
 
     @Override
     public Size getSize() {
-        return size;
+        return videoSize;
     }
 
     @Override
-    public boolean setMaxSize(int maxSize) {
+    protected boolean applyNewVideoConstraints(VideoConstraints videoConstraints) {
         if (explicitSize != null) {
             return false;
         }
 
-        this.maxSize = maxSize;
-        try {
-            size = selectSize(cameraId, null, maxSize, aspectRatio, highSpeed);
-            return size != null;
-        } catch (CameraAccessException e) {
-            Ln.w("Could not select camera size", e);
-            return false;
-        }
+        this.videoConstraints = videoConstraints;
+        return true;
     }
 
     @SuppressLint("MissingPermission")
-    @TargetApi(Build.VERSION_CODES.S)
+    @TargetApi(AndroidVersions.API_31_ANDROID_12)
     private CameraDevice openCamera(String id) throws CameraAccessException, InterruptedException {
         CompletableFuture<CameraDevice> future = new CompletableFuture<>();
         ServiceManager.getCameraManager().openCamera(id, new CameraDevice.StateCallback() {
@@ -256,7 +408,7 @@ public class CameraCapture extends SurfaceCapture {
             public void onDisconnected(CameraDevice camera) {
                 Ln.w("Camera disconnected");
                 disconnected.set(true);
-                requestReset();
+                getCaptureControl().reset(CaptureControl.RESET_REASON_TERMINATED);
             }
 
             @Override
@@ -289,47 +441,8 @@ public class CameraCapture extends SurfaceCapture {
         }
     }
 
-    @TargetApi(Build.VERSION_CODES.S)
-    private CameraCaptureSession createCaptureSession(CameraDevice camera, Surface surface) throws CameraAccessException, InterruptedException {
-        CompletableFuture<CameraCaptureSession> future = new CompletableFuture<>();
-        OutputConfiguration outputConfig = new OutputConfiguration(surface);
-        List<OutputConfiguration> outputs = Arrays.asList(outputConfig);
-
-        int sessionType = highSpeed ? SessionConfiguration.SESSION_HIGH_SPEED : SessionConfiguration.SESSION_REGULAR;
-        SessionConfiguration sessionConfig = new SessionConfiguration(sessionType, outputs, cameraExecutor, new CameraCaptureSession.StateCallback() {
-            @Override
-            public void onConfigured(CameraCaptureSession session) {
-                future.complete(session);
-            }
-
-            @Override
-            public void onConfigureFailed(CameraCaptureSession session) {
-                future.completeExceptionally(new CameraAccessException(CameraAccessException.CAMERA_ERROR));
-            }
-        });
-
-        camera.createCaptureSession(sessionConfig);
-
-        try {
-            return future.get();
-        } catch (ExecutionException e) {
-            throw (CameraAccessException) e.getCause();
-        }
-    }
-
-    private CaptureRequest createCaptureRequest(Surface surface) throws CameraAccessException {
-        CaptureRequest.Builder requestBuilder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_RECORD);
-        requestBuilder.addTarget(surface);
-
-        if (fps > 0) {
-            requestBuilder.set(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, new Range<>(fps, fps));
-        }
-
-        return requestBuilder.build();
-    }
-
-    @TargetApi(Build.VERSION_CODES.S)
-    private void setRepeatingRequest(CameraCaptureSession session, CaptureRequest request) throws CameraAccessException, InterruptedException {
+    @TargetApi(AndroidVersions.API_31_ANDROID_12)
+    private void setRepeatingRequest(CameraCaptureSession session, CaptureRequest request) throws CameraAccessException {
         CameraCaptureSession.CaptureCallback callback = new CameraCaptureSession.CaptureCallback() {
             @Override
             public void onCaptureStarted(CameraCaptureSession session, CaptureRequest request, long timestamp, long frameNumber) {
@@ -354,5 +467,65 @@ public class CameraCapture extends SurfaceCapture {
     @Override
     public boolean isClosed() {
         return disconnected.get();
+    }
+
+    public void setTorchEnabled(boolean enabled) {
+        cameraHandler.post(() -> {
+            assertCameraThread();
+            if (currentSession != null && requestBuilder != null) {
+                try {
+                    Ln.i("Turn camera torch " + (enabled ? "on" : "off"));
+                    requestBuilder.set(CaptureRequest.FLASH_MODE, enabled ? CaptureRequest.FLASH_MODE_TORCH : CaptureRequest.FLASH_MODE_OFF);
+                    CaptureRequest request = requestBuilder.build();
+                    setRepeatingRequest(currentSession, request);
+                } catch (CameraAccessException e) {
+                    Ln.e("Camera error", e);
+                }
+            }
+        });
+    }
+
+    @TargetApi(AndroidVersions.API_30_ANDROID_11)
+    private void zoom(boolean in) {
+        cameraHandler.post(() -> {
+            assertCameraThread();
+            if (currentSession != null && requestBuilder != null) {
+                // Always align to log values
+                double z = Math.round(Math.log(zoom) / Math.log(ZOOM_FACTOR));
+                double dir = in ? 1 : -1;
+                zoom = (float) Math.pow(ZOOM_FACTOR, z + dir);
+
+                try {
+                    zoom = clampZoom(zoom);
+                    Ln.i("Set camera zoom: " + zoom);
+                    requestBuilder.set(CaptureRequest.CONTROL_ZOOM_RATIO, zoom);
+                    CaptureRequest request = requestBuilder.build();
+                    setRepeatingRequest(currentSession, request);
+                } catch (CameraAccessException e) {
+                    Ln.e("Camera error", e);
+                }
+            }
+        });
+    }
+
+    public void zoomIn() {
+        zoom(true);
+    }
+
+    public void zoomOut() {
+        zoom(false);
+    }
+
+    private float clampZoom(float value) {
+        assertCameraThread();
+        if (zoomRange == null) {
+            return value;
+        }
+
+        return zoomRange.clamp(value);
+    }
+
+    private void assertCameraThread() {
+        assert Thread.currentThread() == cameraThread;
     }
 }

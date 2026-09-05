@@ -1,13 +1,14 @@
 package com.genymobile.scrcpy.wrappers;
 
+import com.genymobile.scrcpy.AndroidVersions;
 import com.genymobile.scrcpy.FakeContext;
 import com.genymobile.scrcpy.util.Ln;
 
 import android.annotation.SuppressLint;
 import android.annotation.TargetApi;
+import android.content.IContentProvider;
 import android.content.Intent;
 import android.os.Binder;
-import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
 import android.os.IInterface;
@@ -24,6 +25,7 @@ public final class ActivityManager {
     private Method removeContentProviderExternalMethod;
     private Method startActivityAsUserMethod;
     private Method forceStopPackageMethod;
+    private Method broadcastIntentMethod;
 
     static ActivityManager create() {
         try {
@@ -63,8 +65,8 @@ public final class ActivityManager {
         return removeContentProviderExternalMethod;
     }
 
-    @TargetApi(Build.VERSION_CODES.Q)
-    private ContentProvider getContentProviderExternal(String name, IBinder token) {
+    @TargetApi(AndroidVersions.API_29_ANDROID_10)
+    public IContentProvider getContentProviderExternal(String name, IBinder token) {
         try {
             Method method = getGetContentProviderExternalMethod();
             Object[] args;
@@ -83,11 +85,7 @@ public final class ActivityManager {
             // IContentProvider provider = providerHolder.provider;
             Field providerField = providerHolder.getClass().getDeclaredField("provider");
             providerField.setAccessible(true);
-            Object provider = providerField.get(providerHolder);
-            if (provider == null) {
-                return null;
-            }
-            return new ContentProvider(this, provider, name, token);
+            return (IContentProvider) providerField.get(providerHolder);
         } catch (ReflectiveOperationException e) {
             Ln.e("Could not invoke method", e);
             return null;
@@ -104,7 +102,12 @@ public final class ActivityManager {
     }
 
     public ContentProvider createSettingsProvider() {
-        return getContentProviderExternal("settings", new Binder());
+        IBinder token = new Binder();
+        IContentProvider provider = getContentProviderExternal("settings", token);
+        if (provider == null) {
+            return null;
+        }
+        return new ContentProvider(this, provider, "settings", token);
     }
 
     private Method getStartActivityAsUserMethod() throws NoSuchMethodException, ClassNotFoundException {
@@ -118,8 +121,12 @@ public final class ActivityManager {
         return startActivityAsUserMethod;
     }
 
-    @SuppressWarnings("ConstantConditions")
     public int startActivity(Intent intent) {
+        return startActivity(intent, null);
+    }
+
+    @SuppressWarnings("ConstantConditions")
+    public int startActivity(Intent intent, Bundle options) {
         try {
             Method method = getStartActivityAsUserMethod();
             return (int) method.invoke(
@@ -133,7 +140,7 @@ public final class ActivityManager {
                     /* requestCode */ 0,
                     /* startFlags */ 0,
                     /* profilerInfo */ null,
-                    /* bOptions */ null,
+                    /* bOptions */ options,
                     /* userId */ /* UserHandle.USER_CURRENT */ -2);
         } catch (Throwable e) {
             Ln.e("Could not invoke method", e);
@@ -152,6 +159,32 @@ public final class ActivityManager {
         try {
             Method method = getForceStopPackageMethod();
             method.invoke(manager, packageName, /* userId */ /* UserHandle.USER_CURRENT */ -2);
+        } catch (Throwable e) {
+            Ln.e("Could not invoke method", e);
+        }
+    }
+
+    private Method getBroadcastIntentMethod() throws NoSuchMethodException {
+        if (broadcastIntentMethod == null) {
+            try {
+                Class<?> iApplicationThreadClass = Class.forName("android.app.IApplicationThread");
+                Class<?> iIntentReceiverClass = Class.forName("android.content.IIntentReceiver");
+                broadcastIntentMethod = manager.getClass()
+                        .getMethod("broadcastIntent", iApplicationThreadClass, Intent.class, String.class, iIntentReceiverClass, int.class,
+                                String.class, Bundle.class, String[].class, int.class, Bundle.class, boolean.class, boolean.class, int.class);
+            } catch (ClassNotFoundException e) {
+                throw new AssertionError(e);
+            }
+        }
+        return broadcastIntentMethod;
+    }
+
+    public void sendBroadcast(Intent intent) {
+        try {
+            // Equivalent to:
+            //     adb shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d file://<path>
+            Method method = getBroadcastIntentMethod();
+            method.invoke(manager, null, intent, null, null, 0, null, null, null, -1, null, true, false, /* userId */ -2);
         } catch (Throwable e) {
             Ln.e("Could not invoke method", e);
         }
